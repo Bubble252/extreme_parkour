@@ -340,6 +340,19 @@ class Terrain:
         # np.set_printoptions(precision=2)
         # print(np.array(self.proportions), choice)
         terrain.idx = idx
+        
+        # 为没有设置 goals 的地形添加默认目标点
+        # 默认目标点：沿着 x 方向均匀分布
+        if not hasattr(terrain, 'goals'):
+            num_goals = self.num_goals
+            goals = np.zeros((num_goals, 2))
+            mid_y = terrain.length // 2
+            for g in range(num_goals):
+                # 从起点到终点均匀分布目标点
+                x_pos = (g + 1) * terrain.width / (num_goals + 1)
+                goals[g] = [x_pos, mid_y]
+            terrain.goals = goals * terrain.horizontal_scale
+        
         return terrain
 
     def add_terrain_to_map(self, terrain, row, col):
