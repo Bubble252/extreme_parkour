@@ -192,10 +192,16 @@ class Terrain:
             self.add_roughness(terrain)
         elif choice < self.proportions[6]:
             idx = 7
-            stones_size = 1.5 - 1.2*difficulty
-            # terrain_utils.stepping_stones_terrain(terrain, stone_size=stones_size, stone_distance=0.1, stone_distance_rand=0, max_height=0.04*difficulty, platform_size=2.)
+            # Stepping Stones 踏石地形 - 轮式机器人适配参数
+            # 石块更大、间距更小，适合连续滚动
+            stones_size = 1.5 - 0.5*difficulty   # 石块大小: 1.5m -> 1.0m (比原来更大)
+            stone_dist = 0.0 + 0.25*difficulty   # 间距: 0m -> 0.25m (比原来更小)
             half_sloped_terrain(terrain, wall_width=4, start2center=0.5, max_height=0.00)
-            stepping_stones_terrain(terrain, stone_size=1.5-0.2*difficulty, stone_distance=0.0+0.4*difficulty, max_height=0.2*difficulty, platform_size=1.2)
+            stepping_stones_terrain(terrain, 
+                                    stone_size=stones_size, 
+                                    stone_distance=stone_dist, 
+                                    max_height=0.15*difficulty,  # 高度差也减小
+                                    platform_size=1.5)
             self.add_roughness(terrain)
         elif choice < self.proportions[7]:
             idx = 8
@@ -320,6 +326,16 @@ class Terrain:
         elif choice < self.proportions[19]:
             idx = 20
             demo_terrain(terrain)
+            self.add_roughness(terrain)
+        elif choice < self.proportions[20]:
+            # log_bridge 独木桥地形 (从 LEEPS 移植)
+            idx = 21
+            log_bridge_terrain(terrain,
+                               num_logs=self.num_goals - 2,
+                               log_width=0.5 - 0.2*difficulty,  # 难度越高桥越窄 (0.5m -> 0.3m)
+                               log_length_range=[1.0 + 1.0*difficulty, 1.5 + 1.5*difficulty],
+                               y_rand_range=[-0.2 - 0.3*difficulty, 0.2 + 0.3*difficulty],
+                               x_range=[0.5, 1.2])
             self.add_roughness(terrain)
         # np.set_printoptions(precision=2)
         # print(np.array(self.proportions), choice)
@@ -941,3 +957,109 @@ def convert_heightfield_to_trimesh(height_field_raw, horizontal_scale, vertical_
         triangles[start+1:stop:2, 2] = ind3
 
     return vertices, triangles, move_x != 0
+
+
+# =============================================================================
+# Log Bridge 独木桥地形 (从 LEEPS 项目移植，适配 Tita2 轮式机器人)
+# =============================================================================
+def log_bridge_terrain(terrain,
+                       num_logs=6,
+                       platform_len=2.0,
+                       log_length_range=[1.0, 2.5],
+                       log_width=0.4,
+                       y_rand_range=[-0.3, 0.3],
+                       x_range=[0.5, 1.5],
+                       gap_depth=-200,
+                       pad_width=0.1,
+                       pad_height=0.5):
+    """
+    生成独木桥地形 - 从 LEEPS 项目移植
+    
+    机器人需要走在狭窄的桥上，两边是深渊。
+    适合训练轮式机器人的平衡能力和路径规划能力。
+    
+    Args:
+        terrain: SubTerrain 对象
+        num_logs: 独木桥数量 (对应目标点数量)
+        platform_len: 起始平台长度 [m]
+        log_length_range: 桥长度范围 [min, max] [m]
+        log_width: 桥宽度 [m] - 越小越难！Tita2建议最小0.3m
+        y_rand_range: Y方向随机偏移范围 [m] - 增加难度
+        x_range: X方向间距范围 [m]
+        gap_depth: 深渊深度 (像素值，负数)
+        pad_width: 边界宽度 [m]
+        pad_height: 边界高度 [m]
+    
+    Returns:
+        terrain: 更新后的地形对象，包含 goals 数组
+    """
+    goals = np.zeros((num_logs + 2, 2))
+    
+    # 转换为像素单位
+    mid_y = terrain.length // 2
+    platform_len_px = round(platform_len / terrain.horizontal_scale)
+    
+    log_length_min = round(log_length_range[0] / terrain.horizontal_scale)
+    log_length_max = round(log_length_range[1] / terrain.horizontal_scale)
+    half_log_width = round(log_width / 2 / terrain.horizontal_scale)
+    y_rand_min = round(y_rand_range[0] / terrain.horizontal_scale)
+    y_rand_max = round(y_rand_range[1] / terrain.horizontal_scale)
+    x_rand_min = round(x_range[0] / terrain.horizontal_scale)
+    x_rand_max = round(x_range[1] / terrain.horizontal_scale)
+    
+    # 初始化地形为平地
+    terrain.height_field_raw[:, :] = 0
+    
+    # 起始平台
+    terrain.height_field_raw[0:platform_len_px, :] = 0
+    goals[0] = [platform_len_px - 1, mid_y]
+    
+    # 当前 x 位置
+    x_pos = platform_len_px
+    
+    for i in range(num_logs):
+        # 随机参数
+        x_rand = np.random.randint(x_rand_min, max(x_rand_min+1, x_rand_max))
+        log_length = np.random.randint(log_length_min, max(log_length_min+1, log_length_max))
+        
+        # Y方向随机偏移
+        if y_rand_min < y_rand_max:
+            y_rand = np.random.randint(y_rand_min, y_rand_max)
+        else:
+            y_rand = 0
+        
+        # 移动到下一个位置
+        x_pos += x_rand
+        
+        # 确保不超出边界
+        if x_pos + log_length >= terrain.width - 20:
+            break
+            
+        # 绘制独木桥区域
+        # 两边是深渊
+        y_start = mid_y + y_rand - half_log_width
+        y_end = mid_y + y_rand + half_log_width
+        
+        # 确保 y 坐标在有效范围内
+        y_start = max(0, y_start)
+        y_end = min(terrain.length, y_end)
+        
+        # 深渊部分
+        terrain.height_field_raw[x_pos:x_pos+log_length, :y_start] = gap_depth
+        terrain.height_field_raw[x_pos:x_pos+log_length, y_end:] = gap_depth
+        # 桥面保持平整
+        terrain.height_field_raw[x_pos:x_pos+log_length, y_start:y_end] = 0
+        
+        # 记录目标点 (桥中心)
+        goals[i+1] = [x_pos + log_length//2, mid_y + y_rand]
+        
+        x_pos += log_length
+    
+    # 终点平台
+    terrain.height_field_raw[x_pos+10:, :] = 0
+    goals[-1] = [min(x_pos + 30, terrain.width - 10), mid_y]
+    
+    # 转换目标点坐标为米制单位
+    terrain.goals = goals * terrain.horizontal_scale
+    
+    return terrain

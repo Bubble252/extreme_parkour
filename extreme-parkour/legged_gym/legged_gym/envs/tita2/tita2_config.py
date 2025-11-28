@@ -167,28 +167,42 @@ class Tita2Cfg(LeggedRobotCfg):
         max_init_terrain_level = 5
         border_size = 25
         
-        # 地形类型比例（与父类保持完全一致，只使用 parkour 地形）
+        # 地形类型比例 - 轮足机器人优化配置
+        # ============================================================
+        # 设计原则：
+        # 1. 轮子擅长：坡道、平地、宽通道
+        # 2. 轮子困难：跳跃、大高度差、窄缝隙
+        # 3. 课程学习：先简单后困难，difficulty 从 0→1
+        # ============================================================
         terrain_dict = {
-            "smooth slope": 0., 
-            "rough slope up": 0.0,
-            "rough slope down": 0.0,
-            "rough stairs up": 0., 
-            "rough stairs down": 0., 
-            "discrete": 0., 
-            "stepping stones": 0.0,
-            "gaps": 0., 
-            "smooth flat": 0,
-            "pit": 0.0,
-            "wall": 0.0,
-            "platform": 0.,
-            "large stairs up": 0.,
-            "large stairs down": 0.,
-            "parkour": 0.2,             # idx 15
-            "parkour_hurdle": 0.2,      # idx 16
-            "parkour_flat": 0.2,        # idx 17
-            "parkour_step": 0.2,        # idx 18
-            "parkour_gap": 0.2,         # idx 19
-            "demo": 0.0,                # idx 20 (禁用)
+            # === 基础地形 (30%) - 轮子最擅长 ===
+            "smooth slope": 0.1,        # ✅ 平滑坡道 (difficulty控制坡度: 0→16°)
+            "rough slope up": 0.1,      # ✅ 粗糙上坡 (有地面噪声)
+            "rough slope down": 0.1,    # ✅ 粗糙下坡
+            
+            # === 中等难度 (45%) - 平衡和路径规划 ===
+            "smooth flat": 0.10,        # ✅ 纯平地 (热身)
+            "parkour_flat": 0.15,       # ✅ 平坦parkour (宽通道训练)
+            "log_bridge": 0.15,         # ✅ 独木桥 (窄通道平衡) - 宽度0.5m→0.3m
+            "stepping stones": 0.10,    # ⚠️ 踏石 (已调大石块、减小间距)
+            
+            # === 挑战地形 (15%) - 高难度 ===
+            "parkour": 0.10,            # ⚠️ 倾斜石块 (需要精确平衡)
+            "platform": 0.10,           # ⚠️ 平台 (低高度跳跃)
+            
+            # === 禁用地形 (0%) - 不适合轮式 ===
+            "rough stairs up": 0.0,     # ❌ 楼梯 - 轮子无法爬
+            "rough stairs down": 0.0,
+            "discrete": 0.0,            # ❌ 离散障碍
+            "gaps": 0.0,                # ❌ 缝隙
+            "pit": 0.0,                 # ❌ 深坑
+            "wall": 0.0,                # ❌ 墙壁
+            "large stairs up": 0.0,     # ❌ 大楼梯
+            "large stairs down": 0.0,
+            "parkour_hurdle": 0.0,      # ❌ 跨栏 - 轮子无法跳跃
+            "parkour_step": 0.0,        # ❌ 大阶梯 - 高度差太大
+            "parkour_gap": 0.0,         # ❌ 沟壑 - 轮子会卡住
+            "demo": 0.0,
         }
         terrain_proportions = list(terrain_dict.values())
         
