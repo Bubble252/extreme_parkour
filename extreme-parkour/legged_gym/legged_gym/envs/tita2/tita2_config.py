@@ -148,8 +148,11 @@ class Tita2Cfg(LeggedRobotCfg):
             # 原理：exp(-|target_yaw - current_yaw|)，正对目标时奖励最大(1.0)
             # 作用：引导机器人沿着 parkour 地形的最优路径移动
             
-            # 需要额外系统支持的奖励（暂时禁用）
-            feet_edge = 0.0           # ❌ 需要地形边缘检测
+            # 地形边缘检测奖励（已启用 - 轮式专用算法）
+            feet_edge = -0.5          # ✅ 惩罚轮子在陡峭边缘上
+            # 原理：圆周采样8个点，>50%在边缘则惩罚
+            # 权重：-0.5（相比四足的-1.0减半，因为轮子需要滚动空间）
+            # 作用：引导机器人将轮子放在平坦稳定区域，避免边缘失足
             
     class terrain(LeggedRobotCfg.terrain):
         mesh_type = 'trimesh'           # 使用三角网格地形

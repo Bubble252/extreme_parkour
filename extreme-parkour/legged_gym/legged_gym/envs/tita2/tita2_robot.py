@@ -169,7 +169,12 @@ class Tita2Robot(LeggedRobot):
         for i, name in enumerate(hip_names):
             self.hip_indices[i] = self.dof_names.index(name)
         
-        print(f"[Tita2] Environment created: {self.num_envs} envs, {self.num_dof} DOFs, {len(feet_names)} feet, {len(hip_names)} hips")
+        # 轮子参数 (用于 feet_edge 边缘检测)
+        # 从 URDF 中获取：轮子半径 = 0.0925 米
+        self.wheel_radius = 0.0925  # [m]
+        self.wheel_edge_sample_points = 10  # 圆周采样点数
+        
+        print(f"[Tita2] Environment created: {self.num_envs} envs, {self.num_dof} DOFs, {len(feet_names)} feet, {len(hip_names)} hips, wheel_radius={self.wheel_radius}m")
     
     def _init_buffers(self):
         """
@@ -310,7 +315,7 @@ class Tita2Robot(LeggedRobot):
             
             # 尝试推断实际的 n_proprio
             # obs = n_proprio + n_scan + history*n_proprio + n_priv_latent
-            # 让我们从 obs_buf[0] 中减去已知的部分
+            # 让我们从 obs_buf[0] 中减去 已知的部分
             total_obs = self.obs_buf.shape[1]
             n_scan = self.cfg.env.n_scan if hasattr(self.cfg.env, 'n_scan') else 132
             n_priv_latent = self.cfg.env.n_priv_latent if hasattr(self.cfg.env, 'n_priv_latent') else 21
@@ -326,6 +331,81 @@ class Tita2Robot(LeggedRobot):
             print()
             
             self._obs_dim_printed = True
+    
+    def _reward_feet_edge(self):
+        """
+        轮式机器人的边缘检测奖励（覆盖父类方法）
+        
+        原理：
+        1. 轮子是圆柱体，接触地面是一条线/弧面，不是点
+        2. 单点检测不准确，需要在轮子周围采样多个点
+        3. 如果多数采样点在边缘，则认为轮子处于危险状态
+        
+        实现：
+        - 在轮子圆周上均匀采样 8 个点（360度 / 8 = 45度间隔）
+        - 将每个采样点投影到地形网格，查询边缘掩码
+        - 统计有多少采样点在边缘上
+        - 如果 > 50% 的点在边缘，惩罚该轮子
+        
+        相比父类的改进：
+        - 父类：只检查足端中心点（适合点接触）
+        - Tita2：检查轮子圆周采样点（适合连续接触）
+        """
+        import math
+        
+        # Step 1: 获取轮子位置（刚体中心）
+        # self.feet_indices: (2,) 左右轮子的索引
+        wheel_center_pos = self.rigid_body_states[:, self.feet_indices, :2]  # (N, 2, 2) - XY坐标
+        
+        # Step 2: 生成圆周采样点偏移量
+        # 在轮子圆周上均匀分布 8 个点
+        angles = torch.linspace(0, 2*math.pi, self.wheel_edge_sample_points, device=self.device)
+        # offsets: (8, 2) - 每个采样点相对于轮子中心的偏移 [dx, dy]
+        offsets = self.wheel_radius * torch.stack([
+            torch.cos(angles),  # X 方向偏移
+            torch.sin(angles)   # Y 方向偏移
+        ], dim=1)
+        
+        # Step 3: 统计每个轮子有多少采样点在边缘上
+        wheel_edge_count = torch.zeros(self.num_envs, 2, dtype=torch.float, device=self.device)
+        
+        for i in range(self.wheel_edge_sample_points):
+            # 计算采样点的世界坐标
+            # wheel_center_pos: (N, 2, 2)
+            # offsets[i]: (2,) → unsqueeze: (1, 1, 2)
+            sample_pos = wheel_center_pos + offsets[i].unsqueeze(0).unsqueeze(0)  # (N, 2, 2)
+            
+            # 转换为地形网格坐标
+            sample_grid = (
+                (sample_pos + self.terrain.cfg.border_size) / 
+                self.cfg.terrain.horizontal_scale
+            ).round().long()
+            
+            # 裁剪索引防止越界
+            sample_grid[..., 0] = torch.clip(sample_grid[..., 0], 0, self.x_edge_mask.shape[0]-1)
+            sample_grid[..., 1] = torch.clip(sample_grid[..., 1], 0, self.x_edge_mask.shape[1]-1)
+            
+            # 查询边缘掩码
+            at_edge = self.x_edge_mask[sample_grid[..., 0], sample_grid[..., 1]]  # (N, 2) 布尔
+            
+            # 累加边缘点数量
+            wheel_edge_count += at_edge.float()
+        
+        # Step 4: 判定轮子是否在边缘
+        # 如果超过 40% 的采样点在边缘，认为轮子处于危险状态
+        threshold = self.wheel_edge_sample_points * 0.4  # 4 个点
+        wheels_at_edge = wheel_edge_count > threshold  # (N, 2) 布尔
+        
+        # Step 5: 只惩罚接触地面且在边缘的轮子
+        # contact_filt: (N, 2) 轮子接触地面的过滤标记
+        self.feet_at_edge = self.contact_filt & wheels_at_edge
+        
+        # Step 6: 计算奖励（只在高难度地形启用）
+        # terrain_levels > 3：只在难度等级 4+ 启用
+        # torch.sum(dim=-1)：统计有几个轮子在边缘上（0, 1, 或 2）
+        rew = (self.terrain_levels > 3) * torch.sum(self.feet_at_edge, dim=-1)
+        
+        return rew
 
 
 # 导入必要的模块
