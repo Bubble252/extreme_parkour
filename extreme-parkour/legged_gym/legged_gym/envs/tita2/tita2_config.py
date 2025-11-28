@@ -132,12 +132,14 @@ class Tita2Cfg(LeggedRobotCfg):
             feet_stumble = -0.0
             action_rate = -0.01
             
-            # 明确禁用父类默认奖励（需要额外实现）
-            tracking_yaw = 0.0
-            delta_torques = 0.0
-            hip_pos = 0.0
-            dof_error = 0.0
-            feet_edge = 0.0
+            # 可选奖励（初期训练暂时禁用）
+            delta_torques = -1.0e-7   # ✅ 可启用：鼓励平滑扭矩输出
+            dof_error = -0.03         # ✅ 可启用：保持默认关节姿态
+            
+            # 需要额外实现的奖励（暂时禁用）
+            tracking_yaw = 0.0        # ❌ 需要目标点导航系统
+            hip_pos = 0.0             # ⚠️ 需要定义 hip_indices
+            feet_edge = 0.0           # ❌ 需要地形边缘检测
             
     class terrain(LeggedRobotCfg.terrain):
         mesh_type = 'trimesh'           # 使用三角网格地形
