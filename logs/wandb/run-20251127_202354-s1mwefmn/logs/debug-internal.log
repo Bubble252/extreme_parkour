@@ -1,0 +1,2 @@
+{"time":"2025-11-27T20:23:54.271167378+08:00","level":"INFO","msg":"stream: starting","core version":"0.23.0"}
+{"time":"2025-11-27T20:23:54.271306628+08:00","level":"ERROR+4","msg":"stream_init: failed to fetch credentials: api: couldn't get API key: settings: failed to get API key from netrc: open /home/bubble/.netrc: no such file or directory"}
