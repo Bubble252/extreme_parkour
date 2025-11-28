@@ -77,6 +77,10 @@ class Tita2Robot(LeggedRobot):
                     print(f"PD gain of joint {name} were not defined, setting them to zero")
             dof_props_asset['effort'][i] = self.cfg.asset.max_motor_effort
         
+        # 关键：将 default_dof_pos 从 (num_dof,) 变为 (1, num_dof)，以便索引操作
+        # 父类的 _reward_hip_pos 需要二维张量
+        self.default_dof_pos = self.default_dof_pos.unsqueeze(0)
+        
         body_names = self.gym.get_asset_rigid_body_names(robot_asset)
         self.dof_names = self.gym.get_asset_dof_names(robot_asset)
         self.num_bodies = len(body_names)
@@ -158,7 +162,14 @@ class Tita2Robot(LeggedRobot):
         for i in range(len(termination_contact_names)):
             self.termination_contact_indices[i] = self.gym.find_actor_rigid_body_handle(self.envs[0], self.actor_handles[0], termination_contact_names[i])
         
-        print(f"[Tita2] Environment created: {self.num_envs} envs, {self.num_dof} DOFs, {len(feet_names)} feet")
+        # 髋关节索引 (用于 hip_pos 奖励)
+        # Tita 有 4 个髋关节：左右各 2 个 (横滚 leg_1 + 俯仰 leg_2)
+        hip_names = ["joint_left_leg_1", "joint_right_leg_1", "joint_left_leg_2", "joint_right_leg_2"]
+        self.hip_indices = torch.zeros(len(hip_names), dtype=torch.long, device=self.device, requires_grad=False)
+        for i, name in enumerate(hip_names):
+            self.hip_indices[i] = self.dof_names.index(name)
+        
+        print(f"[Tita2] Environment created: {self.num_envs} envs, {self.num_dof} DOFs, {len(feet_names)} feet, {len(hip_names)} hips")
     
     def _init_buffers(self):
         """
@@ -239,8 +250,9 @@ class Tita2Robot(LeggedRobot):
         self.measured_heights = 0
         
         # PD gains（已在 _create_envs 中设置 default_dof_pos）
+        # 注意：default_dof_pos 现在是 (1, num_dof)，可以直接广播赋值
         self.default_dof_pos_all = torch.zeros(self.num_envs, self.num_dof, dtype=torch.float, device=self.device, requires_grad=False)
-        self.default_dof_pos_all[:] = self.default_dof_pos.unsqueeze(0)
+        self.default_dof_pos_all[:] = self.default_dof_pos  # (1, 8) 广播到 (num_envs, 8)
         
         # 设置 PD gains
         for i in range(self.num_dofs):

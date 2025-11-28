@@ -132,13 +132,13 @@ class Tita2Cfg(LeggedRobotCfg):
             feet_stumble = -0.0
             action_rate = -0.01
             
-            # 可选奖励（初期训练暂时禁用）
-            delta_torques = -1.0e-7   # ✅ 可启用：鼓励平滑扭矩输出
-            dof_error = -0.03         # ✅ 可启用：保持默认关节姿态
+            # 已启用的姿态约束奖励
+            delta_torques = -1.0e-7   # ✅ 鼓励平滑扭矩输出
+            dof_error = -0.03         # ✅ 保持默认关节姿态 (所有8个关节)
+            hip_pos = -0.5            # ✅ 约束髋关节位置 (4个髋关节: leg_1和leg_2)
             
-            # 需要额外实现的奖励（暂时禁用）
+            # 需要额外系统支持的奖励（暂时禁用）
             tracking_yaw = 0.0        # ❌ 需要目标点导航系统
-            hip_pos = 0.0             # ⚠️ 需要定义 hip_indices
             feet_edge = 0.0           # ❌ 需要地形边缘检测
             
     class terrain(LeggedRobotCfg.terrain):
