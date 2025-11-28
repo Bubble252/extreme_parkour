@@ -116,12 +116,18 @@ class Tita2Cfg(LeggedRobotCfg):
         heading_command = True
         global_reference = False
         
+        # class ranges:
+        #     lin_vel_x = [-0.4, 1.0]    # [m/s] 只往前走，最小0.4m/s保证课程学习有效
+        #     lin_vel_y = [-0.3, 0.3]   # [m/s] 减小侧向移动
+        #     ang_vel_yaw = [-0.8, 0.8] # [rad/s] 减小转向
+        #     heading = [-3.14, 3.14]   # [rad]
         class ranges:
-            lin_vel_x = [-1.0, 1.0]   # [m/s]
-            lin_vel_y = [-1.0, 1.0]   # [m/s]
-            ang_vel_yaw = [-1.0, 1.0] # [rad/s]
+            lin_vel_x = [-1.0, 1.0]    # [m/s] 只往前走，最小0.4m/s保证课程学习有效
+            lin_vel_y = [-1.0, 1.0]   # [m/s] 减小侧向移动
+            ang_vel_yaw = [-1.0, 1.0] # [rad/s] 减小转向
             heading = [-3.14, 3.14]   # [rad]
-            
+
+
     class rewards(LeggedRobotCfg.rewards):
         soft_dof_pos_limit = 0.9
         base_height_target = 0.35       # Tita 目标站立高度
