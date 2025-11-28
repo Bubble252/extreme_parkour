@@ -34,6 +34,12 @@ class Tita2Cfg(LeggedRobotCfg):
         send_timeouts = True
         episode_length_s = 20
         
+        # 目标点导航系统配置（用于 tracking_yaw 奖励）
+        # 原理：机器人到达一个目标点后，自动切换到下一个目标点
+        reach_goal_delay = 0.5          # 到达目标后延迟 0.5 秒再切换（避免抖动）
+        next_goal_threshold = 0.8       # 距离目标 0.8 米内视为"到达" [m]
+        num_future_goal_obs = 2         # 观测中包含未来 2 个目标的信息（用于前瞻规划）
+        
     class init_state(LeggedRobotCfg.init_state):
         pos = [0.0, 0.0, 0.35]  # x, y, z [m] - 双足站立高度
         rot = [0.0, 0.0, 0.0, 1.0]  # x, y, z, w [quat]
@@ -137,8 +143,12 @@ class Tita2Cfg(LeggedRobotCfg):
             dof_error = -0.03         # ✅ 保持默认关节姿态 (所有8个关节)
             hip_pos = -0.5            # ✅ 约束髋关节位置 (4个髋关节: leg_1和leg_2)
             
+            # 目标点导航奖励（已启用）
+            tracking_yaw = 1.0        # ✅ 鼓励机器人朝向当前目标点
+            # 原理：exp(-|target_yaw - current_yaw|)，正对目标时奖励最大(1.0)
+            # 作用：引导机器人沿着 parkour 地形的最优路径移动
+            
             # 需要额外系统支持的奖励（暂时禁用）
-            tracking_yaw = 0.0        # ❌ 需要目标点导航系统
             feet_edge = 0.0           # ❌ 需要地形边缘检测
             
     class terrain(LeggedRobotCfg.terrain):
